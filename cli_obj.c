@@ -45,8 +45,9 @@ inline Vector calc_norm(Vector a, Vector b, Vector c) {
 /*
  * Transform a vector given its trig ids
  */
-inline void transform(Vector *v, float s, float c) {
-  *v = (Vector){(v->x * c - v->z * s), -v->y, (v->z * c + v->x * s)};
+inline void transform(Vector *v, float ys, float yc, float ps, float pc) {
+  *v = (Vector){v->x * yc - v->z * ys, -v->y, v->z * yc + v->x * ys};
+  *v = (Vector){v->x, v->y * pc - v->z * ps, v->z * pc + v->y * ps};
 }
 
 /*
@@ -202,7 +203,7 @@ int main(int argc, char **argv) {
     SHADE_BUF[y][WIDTH] = '\n';
 
   // render loop
-  for (float yaw = 0;; yaw += YAW_RATE) {
+  for (float yaw = 0, pitch = 0;; yaw += YAW_RATE, pitch += PITCH_RATE) {
     // clear shade and depth buffer
     for (int y = 0; y < HEIGHT; y++)
       for (int x = 0; x < WIDTH; x++) {
@@ -211,7 +212,8 @@ int main(int argc, char **argv) {
       }
 
     // calculate trig ids
-    float yaw_sin = sinf(yaw), yaw_cos = cosf(yaw);
+    float yaw_sin = sinf(yaw), yaw_cos = cosf(yaw), pitch_sin = sinf(pitch),
+          pitch_cos = cosf(pitch);
 
     // loop through faces
     for (Face *face = faces; face < faces + num_faces; face++) {
@@ -219,10 +221,10 @@ int main(int argc, char **argv) {
              norm = face->norm;
 
       // transform vectors
-      transform(&a, yaw_sin, yaw_cos);
-      transform(&b, yaw_sin, yaw_cos);
-      transform(&c, yaw_sin, yaw_cos);
-      transform(&norm, yaw_sin, yaw_cos);
+      transform(&a, yaw_sin, yaw_cos, pitch_sin, pitch_cos);
+      transform(&b, yaw_sin, yaw_cos, pitch_sin, pitch_cos);
+      transform(&c, yaw_sin, yaw_cos, pitch_sin, pitch_cos);
+      transform(&norm, yaw_sin, yaw_cos, pitch_sin, pitch_cos);
 
       // calculate shade
       char shade = calc_shade(norm);
