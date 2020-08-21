@@ -6,7 +6,7 @@
 #define WIDTH 100
 #define HEIGHT 50
 #define CHAR_HW_RATIO 2
-#define MODEL_SCALE 1
+#define MODEL_SCALE 1.01
 #define YAW_RATE 0.0006
 
 // global buffers and structs
@@ -21,6 +21,9 @@ typedef struct {
   int a, b, c;
   Vector norm;
 } Face;
+
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 /*
  * Given three points, calculate the normal vector of the resulting triangle
@@ -41,8 +44,12 @@ inline Vector calc_norm(Vector a, Vector b, Vector c) {
 /*
  * Transform a vector given its trig ids
  */
-inline Vector transform(Vector v, float s, float c) {
-  return (Vector){v.x * c - v.z * s, -v.y, v.z * c + v.x * s};
+inline void transform(Vector *v, float s, float c) {
+  *v = (Vector){
+    (v->x * c - v->z * s) * MODEL_SCALE,
+    -v->y * MODEL_SCALE, 
+    (v->z * c + v->x * s) * MODEL_SCALE
+  };
 }
 
 /*
@@ -50,15 +57,77 @@ inline Vector transform(Vector v, float s, float c) {
  */
 inline char calc_shade(Vector norm) {
   return ".,:~=+*#%@"[(
-      int)((norm.x * 0.57 + norm.y * 0.57 - norm.z * 0.57 + 1) * 5)];
+      int)((norm.x * 0.57 - norm.y * 0.57 + norm.z * 0.57 + 1) * 5)];
+}
+
+/*
+ * Map vector from [-1, 1] to [0, SIZE] coordinate systems
+ */
+inline void map(Vector *v) {
+  const int x_shift = HEIGHT * CHAR_HW_RATIO / 2;
+  const int y_shift = HEIGHT / 2;
+  *v = (Vector){v->x * x_shift + x_shift, v->y * y_shift + y_shift, v->z};
+}
+
+/*
+ * Swap the values of two vectors
+ */
+inline void swap_vec(Vector *a, Vector *b) {
+  Vector tmp = *a;
+  *a = *b;
+  *b = tmp;
 }
 
 /*
  * Draw a given triangle
  */
-inline void draw_tri(Vector a, Vector b,
-                     Vector c, char value) {
-  SHADE_BUF[(int)(a.y * 10 + 20)][(int)(a.x * 10 + 10)] = value;
+inline void draw_tri(Vector a, Vector b, Vector c, char value) {
+  // map vectors to screen coordinate system
+  map(&a);
+  map(&b);
+  map(&c);
+
+  /*
+   * sort vectors so that triangle is in form:
+   *   a          a     *----> x+
+   *  / \        / \    |
+   * b_  \  or  /  _b   |
+   *   ^^-c    c-^^     v y+
+   */
+  if (a.y > c.y)
+    swap_vec(&a, &c);
+  if (b.y > c.y)
+    swap_vec(&b, &c);
+  if (a.y > b.y)
+    swap_vec(&a, &b);
+
+  // calculate divergent angles
+  int beg_y = a.y, mid_y = b.y, end_y = c.y;
+  float a_full = (beg_y == end_y) ? 0 : (a.x - c.x) / (beg_y - end_y),
+        a_half = (beg_y == mid_y) ? 0 : (a.x - b.x) / (beg_y - mid_y),
+        x_full = a.x, x_half = a.x;
+
+  // rasterize
+  for (int y = beg_y; y <= MIN(end_y, HEIGHT - 1); y++) {
+    // draw line if on screen
+    if (y >= 0) {
+      int left_x = MAX(MIN(x_full, x_half), 0),
+          right_x = MIN(MAX(x_full, x_half), WIDTH - 1);
+      for (int x = left_x; x <= right_x; x++)
+        if (a.z > DEPTH_BUF[y][x]) {
+          SHADE_BUF[y][x] = value;
+          DEPTH_BUF[y][x] = a.z;
+        }
+    }
+    
+    // if reached midpoint, switch directions
+    if (y == mid_y)
+      a_half = (mid_y == end_y) ? 0 : (b.x - c.x) / (mid_y - end_y);
+
+    // diverge points
+    x_full += a_full;
+    x_half += a_half;
+  }
 }
 
 /*
@@ -140,7 +209,7 @@ int main(int argc, char **argv) {
     for (int y = 0; y < HEIGHT; y++)
       for (int x = 0; x < WIDTH; x++) {
         SHADE_BUF[y][x] = ' ';
-        DEPTH_BUF[y][x] = ~0;
+        DEPTH_BUF[y][x] = -1. / 0.;
       }
 
     // calculate trig ids
@@ -148,13 +217,13 @@ int main(int argc, char **argv) {
 
     // loop through faces
     for (Face *face = faces; face < faces + num_faces; face++) {
-      Vector a = verts[face->a], b = verts[face->b], c = verts[face->c], norm;
+      Vector a = verts[face->a], b = verts[face->b], c = verts[face->c], norm = face->norm;
 
       // transform vectors
-      a = transform(a, yaw_sin, yaw_cos);
-      b = transform(b, yaw_sin, yaw_cos);
-      c = transform(c, yaw_sin, yaw_cos);
-      norm = transform(norm, yaw_sin, yaw_cos);
+      transform(&a, yaw_sin, yaw_cos);
+      transform(&b, yaw_sin, yaw_cos);
+      transform(&c, yaw_sin, yaw_cos);
+      transform(&norm, yaw_sin, yaw_cos);
 
       // calculate shade
       char shade = calc_shade(norm);
