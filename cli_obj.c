@@ -6,8 +6,9 @@
 #define WIDTH 100
 #define HEIGHT 50
 #define CHAR_HW_RATIO 2
-#define MODEL_SCALE 1.01
+#define MODEL_SCALE 1
 #define YAW_RATE 0.0006
+#define PITCH_RATE 0.0003
 
 // global buffers and structs
 char SHADE_BUF[HEIGHT][WIDTH + 1];
@@ -45,11 +46,7 @@ inline Vector calc_norm(Vector a, Vector b, Vector c) {
  * Transform a vector given its trig ids
  */
 inline void transform(Vector *v, float s, float c) {
-  *v = (Vector){
-    (v->x * c - v->z * s) * MODEL_SCALE,
-    -v->y * MODEL_SCALE, 
-    (v->z * c + v->x * s) * MODEL_SCALE
-  };
+  *v = (Vector){(v->x * c - v->z * s), -v->y, (v->z * c + v->x * s)};
 }
 
 /*
@@ -57,7 +54,7 @@ inline void transform(Vector *v, float s, float c) {
  */
 inline char calc_shade(Vector norm) {
   return ".,:~=+*#%@"[(
-      int)((norm.x * 0.57 - norm.y * 0.57 + norm.z * 0.57 + 1) * 5)];
+      int)((norm.x * 0.57 - norm.y * 0.57 + norm.z * 0.57 + 0.95) * 5)];
 }
 
 /*
@@ -66,7 +63,8 @@ inline char calc_shade(Vector norm) {
 inline void map(Vector *v) {
   const int x_shift = HEIGHT * CHAR_HW_RATIO / 2;
   const int y_shift = HEIGHT / 2;
-  *v = (Vector){v->x * x_shift + x_shift, v->y * y_shift + y_shift, v->z};
+  *v = (Vector){v->x * x_shift * MODEL_SCALE + x_shift,
+                v->y * y_shift * MODEL_SCALE + y_shift, v->z};
 }
 
 /*
@@ -119,7 +117,7 @@ inline void draw_tri(Vector a, Vector b, Vector c, char value) {
           DEPTH_BUF[y][x] = a.z;
         }
     }
-    
+
     // if reached midpoint, switch directions
     if (y == mid_y)
       a_half = (mid_y == end_y) ? 0 : (b.x - c.x) / (mid_y - end_y);
@@ -217,7 +215,8 @@ int main(int argc, char **argv) {
 
     // loop through faces
     for (Face *face = faces; face < faces + num_faces; face++) {
-      Vector a = verts[face->a], b = verts[face->b], c = verts[face->c], norm = face->norm;
+      Vector a = verts[face->a], b = verts[face->b], c = verts[face->c],
+             norm = face->norm;
 
       // transform vectors
       transform(&a, yaw_sin, yaw_cos);
