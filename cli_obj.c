@@ -6,7 +6,7 @@
 #define WIDTH 100
 #define HEIGHT 50
 #define CHAR_HW_RATIO 2
-#define MODEL_SCALE 1
+#define MODEL_SCALE 0.9
 #define YAW_RATE 0.0006
 #define PITCH_RATE 0.0003
 
